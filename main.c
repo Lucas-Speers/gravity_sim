@@ -1,10 +1,12 @@
+#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <time.h>
 
 typedef int bool;
-int quad_capacity = 10;
+int quad_capacity = 1000;
 
 void expect(void *p) {
     if (p == NULL) {
@@ -124,7 +126,7 @@ void add_quad_tree_point(QuadTree *qt, Point *p) {
     }
 }
 
-int max(int x, int y) {
+int max_int(int x, int y) {
     if (x > y) {return x;} else {return y;}
 }
 
@@ -132,10 +134,10 @@ int max_depth(QuadTree *qt) {
     if (qt->is_branch) {
         int maximum_depth = 0;
         QuadTree *children = qt->ptr;
-        maximum_depth = max(maximum_depth, max_depth(&children[0]));
-        maximum_depth = max(maximum_depth, max_depth(&children[1]));
-        maximum_depth = max(maximum_depth, max_depth(&children[2]));
-        maximum_depth = max(maximum_depth, max_depth(&children[3]));
+        maximum_depth = max_int(maximum_depth, max_depth(&children[0]));
+        maximum_depth = max_int(maximum_depth, max_depth(&children[1]));
+        maximum_depth = max_int(maximum_depth, max_depth(&children[2]));
+        maximum_depth = max_int(maximum_depth, max_depth(&children[3]));
         return maximum_depth + 1;
     }
     return 1;
@@ -168,42 +170,94 @@ void vec_with_capacity(VecQuads *vec, int capacity) {
 
 QuadTree* vec_push(VecQuads *vec) {
     if (vec->size == vec->capacity) {
-        unsigned long new_size = (float)(vec->capacity) * 1.5;
+        unsigned long new_size = (vec->capacity + 50) * sizeof(QuadTree);
         vec->ptr = realloc(vec->ptr, new_size);
         expect(vec->ptr);
-        vec->capacity = new_size;
+        vec->capacity += 50;
     }
     QuadTree * ptr = &vec->ptr[vec->size];
     vec->size++;
     return ptr;
 }
 
-void clear_vec(VecQuads *vec) {
-    free(vec->ptr);
+QuadTree* get_vec(VecQuads *vec, int index) {
+    if (index >= vec->size) {
+        printf("bruh\n");
+        exit(1);
+    }
+    return &vec->ptr[index];
 }
 
-void update_velocities(QuadTree *root, QuadTree *current) {
+void clear_vec(VecQuads *vec) {
+    free(vec->ptr);
+    vec->ptr = NULL;
+    vec->size = 0;
+}
+
+float distance(float x, float y, float a, float b) {
+    return sqrtf(((x+a)*(x+a))+((y+b)*(y+b)));
+}
+
+void update_velocities(QuadTree *root, QuadTree *current, int depth) {
+    // printf("Depth: %d\n", depth);
     if (current->is_branch) {
+        // printf("_\n");
         QuadTree *children = current->ptr;
-        update_velocities(root, &children[0]);
-        update_velocities(root, &children[1]);
-        update_velocities(root, &children[2]);
-        update_velocities(root, &children[3]);
+        update_velocities(root, &children[0], depth+1);
+        update_velocities(root, &children[1], depth+1);
+        update_velocities(root, &children[2], depth+1);
+        update_velocities(root, &children[3], depth+1);
     } else {
+        // printf("-\n");
         Point *points = current->ptr;
         for (int i=0; i<current->points; i++) {
             VecQuads stack;
-            vec_with_capacity(&stack, 4);
+            vec_with_capacity(&stack, 50);
+            QuadTree *pointer = vec_push(&stack);
+            *pointer = *root;
             while (1) {
+                // printf("a\n");
                 VecQuads new_stack;
                 vec_with_capacity(&new_stack, stack.size);
+                // printf("b\n");
                 for (int i=0; i<stack.size; i++) {
-                    if (stack.ptr[i].is_branch) {
-                        // check if it's acceptable
-                        
-
+                    if (get_vec(&stack, i)->is_branch) {
+                        // check if it's acceptable TODO
+                        Point p = points[i];
+                        // printf("<\n");
+                        float acceptability = distance(p.x, p.y, get_vec(&stack, i)->bounds.x+(get_vec(&stack, i)->bounds.w/2.0), get_vec(&stack, i)->bounds.y+(get_vec(&stack, i)->bounds.h/2.0)) / max_int(get_vec(&stack, i)->bounds.w, get_vec(&stack, i)->bounds.h);
+                        // printf(">\n");
+                        if (acceptability < 0.5) {
+                            // do calculations for the entire mass
+                            // printf(".");
+                        } else {
+                            // otherwise just add it's children to the stack TODO
+                            QuadTree *children = get_vec(&stack, i)->ptr;
+                            for (int x=0; x<4; x++) {
+                                QuadTree *pointer = vec_push(&new_stack);
+                                // printf("<=\n");
+                                *pointer = children[x];
+                                // printf("=>\n");
+                            }
+                            // printf("SIZE: %d\n", new_stack.size);
+                        }
+                    } else {
+                        // do all the calculations with the points TODO
                     }
                 }
+                // if there are no new jobs, break
+                if (stack.size == 0) {
+                    // printf("z\n");
+                    clear_vec(&stack);
+                    clear_vec(&new_stack);
+                    break;
+                }
+
+                // printf("s\n");
+                // otherwise, rotate the stacks
+                clear_vec(&stack);
+                stack = new_stack;
+                vec_with_capacity(&new_stack, stack.size);
             }
         }
     }
@@ -218,7 +272,7 @@ int main() {
     root.bounds.x = root.bounds.y = -1.0;
     root.bounds.w = root.bounds.h = 2.0;
     
-    for (int i=0; i<1000; i++) {
+    for (int i=0; i<500000; i++) {
         float x = rand_float()*2.0-1.0;
         float y = rand_float()*2.0-1.0;
         Point p;
@@ -227,8 +281,16 @@ int main() {
         p.vx = p.vy = 0;
         add_quad_tree_point(&root, &p);
     }
+
+    printf("point: %lu\n", sizeof(Point));
+    printf("rect: %lu\n", sizeof(Rectangle));
+    printf("vec: %lu\n", sizeof(VecQuads));
+    printf("quad: %lu\n", sizeof(QuadTree));
     
     printf("Depth: %d\n", max_depth(&root));
+    printf("branch? -> %i\n", root.is_branch);
+
+    update_velocities(&root, &root, 0);
     
     free_quad_tree(&root);
     
