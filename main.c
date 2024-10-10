@@ -7,7 +7,7 @@ typedef int bool;
 int quad_capacity = 50;
 // TODO: why does a value of 19362 or more break on windows???
 int point_count = 100000;
-float G = 0;
+float G = 1;
 
 bool width_is_max;
 
