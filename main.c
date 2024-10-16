@@ -1,3 +1,9 @@
+// How to use (requires linux with imagemagick and FFmpeg):
+// gcc main.c -lm
+// ./a.out
+// ffmpeg -f image2 -framerate 10 -i %01d.png -vcodec libx264 -crf 22 video.mp4
+
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,10 +11,9 @@
 #include <string.h>
 
 typedef int bool;
-int quad_capacity = 5;
-// TODO: why does a value of 19362 or more break on windows???
-int point_count = 100000;
-float G = 0.0001;
+int quad_capacity = 5; // TWEAKABLE (preformance)
+int point_count = 10000; // TWEAKABLE
+float G = 0.0001; // TWEAKABLE
 
 int screen_width = 1000;
 int screen_hight = 1000;
@@ -26,7 +31,7 @@ float rand_float() {
     return (float)rand()/(float)(RAND_MAX);
 }
 
-typedef struct Point {
+typedef struct {
     float x, y, vx, vy;
 } Point;
 
@@ -36,7 +41,7 @@ void new_point(Point *p, float x, float y) {
     p->vx = p->vy = 0;
 }
 
-typedef struct Rectangle {
+typedef struct {
     float x, y, w, h;
 } Rectangle;
 
@@ -45,7 +50,7 @@ bool rect_contains_point(Rectangle *r, Point *p) {
            (r->y <= p->y) & (p->y < (r->y+r->h));
 }
 
-typedef struct QuadTree {
+typedef struct {
     Rectangle bounds;
     int mass; // number of points in all child trees
     
@@ -68,7 +73,7 @@ void add_quad_tree_point(QuadTree *qt, Point *p) {
     if (!rect_contains_point(&qt->bounds, p)) {return;}
     
     if (qt->is_branch) {
-        // add to all child nodes TODO
+        // add to all child nodes
         QuadTree *children = qt->ptr;
         add_quad_tree_point(&children[0], p);
         add_quad_tree_point(&children[1], p);
@@ -182,7 +187,7 @@ void get_points_from_tree(QuadTree *qt, Point *array, int *index) {
     }
 }
 
-typedef struct VecPointers {
+typedef struct {
     QuadTree **ptr;
     int size;
     int capacity;
@@ -249,7 +254,7 @@ void update_point(Point *p, QuadTree *root) {
                     size = current_qt->bounds.h;
                 }
                 float acceptability = fabsf(distance(p->x, p->y, center_x, center_y) / size);
-                if (acceptability < 0.5) {
+                if (acceptability < 0.5) { // TWEAKABLE (preformace, but a higher number may be less accurate)
                     // do calculations for the entire mass
                     float r = 1.0/distance_sqrd(p->x, p->y, center_x, center_y);
                     float x_part = center_x - p->x;
@@ -265,7 +270,7 @@ void update_point(Point *p, QuadTree *root) {
                     }
                 }
             } else {
-                // do all the calculations with the points TODO
+                // do all the calculations with the points
                 Point *points = current_qt->ptr;
                 for (int x=0; x<current_qt->points; x++) {
                     float r = 1.0/distance_sqrd(p->x, p->y, points[x].x, points[x].y);
@@ -319,18 +324,16 @@ void points_to_image(Point *points, unsigned char *image) {
         pixel_x = range(0, pixel_x, screen_width-1);
         pixel_y = range(0, pixel_y, screen_hight-1);
         image[(pixel_x+pixel_y*screen_width)*3] = 255;
-        image[(pixel_x+pixel_y*screen_width)*3+1] = fabsf(points[i].vx)*50;
-        image[(pixel_x+pixel_y*screen_width)*3+2] = fabsf(points[i].vy)*50;
+        image[(pixel_x+pixel_y*screen_width)*3+1] = 255; // fabsf(points[i].vx)*50
+        image[(pixel_x+pixel_y*screen_width)*3+2] = 255; // fabsf(points[i].vy)*50;
     }
 }
 
 void write_to_ppm(unsigned char *image, char *filename) {
     FILE *fptr;
-
     fptr = fopen(filename, "w");
 
     fprintf(fptr, "P3\n%d %d\n255\n", screen_width, screen_hight);
-
     for (int i=0; i<screen_hight*screen_width*3; i+=3) {
         fprintf(fptr, "%d %d %d\n", image[i], image[i+1], image[i+2]);
     }
@@ -339,68 +342,86 @@ void write_to_ppm(unsigned char *image, char *filename) {
 }
 
 int main() {
-    time_t start, stop;
-    start = clock();
-    printf("Starting...");
-    fflush(stdout);
-    
-    QuadTree root;
-    new_quad_tree(&root);
-    root.bounds.x = root.bounds.y = -1.1;
-    root.bounds.w = root.bounds.h = 2.2;
-    width_is_max = 1;
-    
-    for (int i=0; i<point_count; i++) {
-        float x = rand_float()*2.0-1.0;
-        float y = rand_float()*2.0-1.0;
-        Point p;
-        p.x = x;
-        p.y = y;
-        p.vx = p.vy = 0;
-        add_quad_tree_point(&root, &p);
-    }
-    printf("Done\n");
-    
-    printf("Depth: %d\n", max_depth(&root));
-
-    printf("Updating Velocities...");
-    fflush(stdout);
-
-    update_velocities(&root, &root);
-    printf("Done\n");
-
-    printf("Recollecting...");
-    fflush(stdout);
 
     Point *points = calloc(point_count, sizeof(Point));
     expect(points);
-    int index = 0;
-    get_points_from_tree(&root, points, &index);
-    printf("Done: %d\n", index);
 
     unsigned char *image = calloc(screen_hight*screen_width*3, sizeof(char));
-    points_to_image(points, image);
-    write_to_ppm(image, "0.ppm");
-    apply_velocities(points);
-    memset(image, 0, screen_hight*screen_width*3*sizeof(char));
-    points_to_image(points, image);
-    write_to_ppm(image, "1.ppm");
-    apply_velocities(points);
-    memset(image, 0, screen_hight*screen_width*3*sizeof(char));
-    points_to_image(points, image);
-    write_to_ppm(image, "2.ppm");
-    apply_velocities(points);
-    memset(image, 0, screen_hight*screen_width*3*sizeof(char));
-    points_to_image(points, image);
-    write_to_ppm(image, "3.ppm");
+    expect(image);
+
+    char *filename = calloc(255, sizeof(char));
+    expect(filename);
+    char *new_filename = calloc(255, sizeof(char));
+    expect(new_filename);
+    char *conversion_command = calloc(255, sizeof(char));
+    expect(conversion_command);
+    char *remove_command = calloc(255, sizeof(char));
+    expect(remove_command);
+
+    int i=0;
+    while (i<point_count) {
+        float x = rand_float()*2.0-1.0;
+        float y = rand_float()*2.0-1.0;
+        float distance = x*x+y*y;
+        if (distance < 1.0 & distance > 0.2) {
+            Point p;
+            p.x = x;
+            p.y = y;
+            // TODO: use actuall trig or something
+            float velocity = sqrtf(G*point_count/distance) * 10; // TWEAKABLE (just the constant)
+            p.vx = y*velocity;
+            p.vy = -x*velocity;
+            points[i] = p;
+            i++;
+        }
+    }
+
+    int iteration = 0;
+
+    while (1) {
+        time_t start, stop;
+        start = clock();
+
+        sprintf(filename, "%d.ppm", iteration);
+        sprintf(new_filename, "%d.png", iteration);
+        sprintf(conversion_command, "convert %s %s", filename, new_filename);
+        sprintf(remove_command, "rm %s", filename);
+        
+
+        QuadTree root;
+        new_quad_tree(&root);
+        root.bounds.x = root.bounds.y = -1.1;
+        root.bounds.w = root.bounds.h = 2.2;
+        width_is_max = 1;
+
+        for (int i=0; i<point_count; i++) {
+            add_quad_tree_point(&root, &points[i]);
+        }
     
-    free_quad_tree(&root);
+        update_velocities(&root, &root);
+        
+        int index = 0;
+        get_points_from_tree(&root, points, &index);
+        point_count = index; // some might fly out and no longer be valid
+        
+        apply_velocities(points);
+        
+        memset(image, 0, screen_hight*screen_width*3*sizeof(char));
+        points_to_image(points, image);
+        write_to_ppm(image, filename);
+
+        system(conversion_command);
+        system(remove_command);
+
+        free_quad_tree(&root);
+
+        stop = clock();
+        printf("iteration %d took %f seconds for %d points\n", iteration, (float)(stop-start)/CLOCKS_PER_SEC, point_count);
+        iteration++;
+    }
+
     free(points);
     free(image);
 
-    stop = clock();
-
-    printf("time: %f\n", (float)(stop-start)/CLOCKS_PER_SEC);
-    
     return 0;
 }
