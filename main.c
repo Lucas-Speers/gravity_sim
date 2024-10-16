@@ -2,12 +2,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 typedef int bool;
-int quad_capacity = 50;
+int quad_capacity = 5;
 // TODO: why does a value of 19362 or more break on windows???
 int point_count = 100000;
-float G = 1;
+float G = 0.0001;
+
+int screen_width = 1000;
+int screen_hight = 1000;
 
 bool width_is_max;
 
@@ -130,6 +134,14 @@ int max_int(int x, int y) {
     if (x > y) {return x;} else {return y;}
 }
 
+int min_int(int x, int y) {
+    if (x < y) {return x;} else {return y;}
+}
+
+int range(int x, int value, int y) {
+    return min_int(max_int(x, value), y);
+}
+
 int max_depth(QuadTree *qt) {
     if (qt->is_branch) {
         int maximum_depth = 0;
@@ -213,12 +225,12 @@ float distance(float x, float y, float a, float b) {
 }
 
 float distance_sqrd(float x, float y, float a, float b) {
-    return sqrtf(((x+a)*(x+a))+((y+b)*(y+b)));
+    return ((x+a)*(x+a))+((y+b)*(y+b));
 }
 
 void update_point(Point *p, QuadTree *root) {
     VecPointers stack;
-    vec_with_capacity(&stack, 50);
+    vec_with_capacity(&stack, 100);
     QuadTree **pointer = vec_push(&stack);
     *pointer = root;
     VecPointers next_stack;
@@ -236,12 +248,12 @@ void update_point(Point *p, QuadTree *root) {
                 } else {
                     size = current_qt->bounds.h;
                 }
-                float acceptability = distance(p->x, p->y, center_x, center_y) / size;
+                float acceptability = fabsf(distance(p->x, p->y, center_x, center_y) / size);
                 if (acceptability < 0.5) {
                     // do calculations for the entire mass
                     float r = 1.0/distance_sqrd(p->x, p->y, center_x, center_y);
-                    float x_part = fabsf(p->x - center_x);
-                    float y_part = fabsf(p->y - center_y);
+                    float x_part = center_x - p->x;
+                    float y_part = center_y - p->y;
                     p->vx += r*x_part * G * current_qt->mass;
                     p->vy += r*y_part * G * current_qt->mass;
                 } else {
@@ -257,8 +269,8 @@ void update_point(Point *p, QuadTree *root) {
                 Point *points = current_qt->ptr;
                 for (int x=0; x<current_qt->points; x++) {
                     float r = 1.0/distance_sqrd(p->x, p->y, points[x].x, points[x].y);
-                    float x_part = fabsf(p->x - points[x].x);
-                    float y_part = fabsf(p->y - points[x].y);
+                    float x_part = points[x].x - p->x;
+                    float y_part = points[x].y - p->y;
                     p->vx += r*x_part * G;
                     p->vy += r*y_part * G;
                 }
@@ -293,6 +305,39 @@ void update_velocities(QuadTree *root, QuadTree *current) {
     }
 }
 
+void apply_velocities(Point *points) {
+    for (int i=0; i<point_count; i++) {
+        points[i].x += points[i].vx * G;
+        points[i].y += points[i].vy * G;
+    }
+}
+
+void points_to_image(Point *points, unsigned char *image) {
+    for (int i=0; i<point_count; i++) {
+        int pixel_x = (points[i].x+1.0)*(float)(screen_width)*0.5;
+        int pixel_y = (points[i].y+1.0)*(float)(screen_hight)*0.5;
+        pixel_x = range(0, pixel_x, screen_width-1);
+        pixel_y = range(0, pixel_y, screen_hight-1);
+        image[(pixel_x+pixel_y*screen_width)*3] = 255;
+        image[(pixel_x+pixel_y*screen_width)*3+1] = fabsf(points[i].vx)*50;
+        image[(pixel_x+pixel_y*screen_width)*3+2] = fabsf(points[i].vy)*50;
+    }
+}
+
+void write_to_ppm(unsigned char *image, char *filename) {
+    FILE *fptr;
+
+    fptr = fopen(filename, "w");
+
+    fprintf(fptr, "P3\n%d %d\n255\n", screen_width, screen_hight);
+
+    for (int i=0; i<screen_hight*screen_width*3; i+=3) {
+        fprintf(fptr, "%d %d %d\n", image[i], image[i+1], image[i+2]);
+    }
+
+    fclose(fptr); 
+}
+
 int main() {
     time_t start, stop;
     start = clock();
@@ -301,8 +346,8 @@ int main() {
     
     QuadTree root;
     new_quad_tree(&root);
-    root.bounds.x = root.bounds.y = -1.0;
-    root.bounds.w = root.bounds.h = 2.0;
+    root.bounds.x = root.bounds.y = -1.1;
+    root.bounds.w = root.bounds.h = 2.2;
     width_is_max = 1;
     
     for (int i=0; i<point_count; i++) {
@@ -331,10 +376,27 @@ int main() {
     expect(points);
     int index = 0;
     get_points_from_tree(&root, points, &index);
-    printf("Done\n");
+    printf("Done: %d\n", index);
+
+    unsigned char *image = calloc(screen_hight*screen_width*3, sizeof(char));
+    points_to_image(points, image);
+    write_to_ppm(image, "0.ppm");
+    apply_velocities(points);
+    memset(image, 0, screen_hight*screen_width*3*sizeof(char));
+    points_to_image(points, image);
+    write_to_ppm(image, "1.ppm");
+    apply_velocities(points);
+    memset(image, 0, screen_hight*screen_width*3*sizeof(char));
+    points_to_image(points, image);
+    write_to_ppm(image, "2.ppm");
+    apply_velocities(points);
+    memset(image, 0, screen_hight*screen_width*3*sizeof(char));
+    points_to_image(points, image);
+    write_to_ppm(image, "3.ppm");
     
     free_quad_tree(&root);
     free(points);
+    free(image);
 
     stop = clock();
 
