@@ -18,9 +18,13 @@ int main() {
     
     int index = 0;
     while (1) {
-        sprintf(conversion_command, "magick %d.ppm %d.png", index, index);
+        // sprintf(conversion_command, "magick %d.ppm %d.png", index, index);
+        sprintf(conversion_command, "convert %d.ppm %d.png", index, index);
         printf("%s\n", conversion_command);
         if (system(conversion_command)) {
+            if (index == 0) {
+                exit(1); 
+            }
             break;
         }
         index++;
@@ -29,6 +33,7 @@ int main() {
     free(remove_file);
     
     system("rm *.ppm");
-    system("ffmpeg -f image2 -framerate 10 -i %01d.png -vcodec libx264 -crf 22 video.mp4");
-    system("rm *.png");
+    if (system("ffmpeg -f image2 -framerate 30 -i %01d.png -vcodec libx264 -crf 22 video.mp4") == 0) {
+        system("rm *.png");
+    }
 }

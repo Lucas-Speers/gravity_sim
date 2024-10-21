@@ -8,8 +8,10 @@
 
 typedef int bool;
 int quad_capacity = 5; // TWEAKABLE (preformance)
-int point_count = 100000; // TWEAKABLE
+int point_count = 10000; // TWEAKABLE
 float G = 0.00001; // TWEAKABLE
+float point_radius = 0.0001;
+float collision_strength = 1.0;
 
 int screen_width = 1000;
 int screen_hight = 1000;
@@ -250,7 +252,7 @@ void update_point(Point *p, QuadTree *root) {
                     size = current_qt->bounds.h;
                 }
                 float acceptability = fabsf(distance(p->x, p->y, center_x, center_y) / size);
-                if (acceptability < 0.5) { // TWEAKABLE (preformace, but a higher number may be less accurate)
+                if (acceptability > 2.0) { // TWEAKABLE (preformace, but a higher number may be less accurate)
                     // do calculations for the entire mass
                     float r = 1.0/distance_sqrd(p->x, p->y, center_x, center_y);
                     float x_part = center_x - p->x;
@@ -268,10 +270,17 @@ void update_point(Point *p, QuadTree *root) {
             } else {
                 // do all the calculations with the points
                 Point *points = current_qt->ptr;
-                for (int x=0; x<current_qt->points; x++) {
-                    float r = 1.0/distance_sqrd(p->x, p->y, points[x].x, points[x].y);
-                    float x_part = points[x].x - p->x;
-                    float y_part = points[x].y - p->y;
+                for (int j=0; j<current_qt->points; j++) {
+                    float point_distance = distance_sqrd(p->x, p->y, points[j].x, points[j].y);
+                    if (point_distance < point_radius*point_radius) { // point collision
+                        float midpoint_x = (p->x + points[j].x) / 2.0;
+                        float midpoint_y = (p->y + points[j].y) / 2.0;
+                        p->vx += (midpoint_x + point_radius * (p->x - points[j].x) / point_distance) * collision_strength;
+                        p->vy += (midpoint_y + point_radius * (p->y - points[j].y) / point_distance) * collision_strength;
+                    }
+                    float r = 1.0/point_distance;
+                    float x_part = points[j].x - p->x;
+                    float y_part = points[j].y - p->y;
                     p->vx += r*x_part * G;
                     p->vy += r*y_part * G;
                 }
@@ -358,12 +367,13 @@ int main() {
         float x = rand_float()*2.0-1.0;
         float y = rand_float()*2.0-1.0;
         float distance = x*x+y*y;
-        if (distance < 1.0 & distance > 0.2) {
+        if (distance < 1.0 & distance > 0.1) {
             Point p;
             p.x = x;
             p.y = y;
             // TODO: use actuall trig or something
-            float velocity = sqrtf(G*point_count/distance) * 10; // TWEAKABLE (just the constant)
+            float velocity = G*point_count/distance * 1000; // TWEAKABLE (just the constant)
+            velocity = 0.0;
             p.vx = y*velocity;
             p.vy = -x*velocity;
             points[i] = p;
@@ -379,8 +389,8 @@ int main() {
         
         QuadTree root;
         new_quad_tree(&root);
-        root.bounds.x = root.bounds.y = -1.1;
-        root.bounds.w = root.bounds.h = 2.2;
+        root.bounds.x = root.bounds.y = -1.0;
+        root.bounds.w = root.bounds.h = 2.0;
         width_is_max = 1;
 
         for (int i=0; i<point_count; i++) {
@@ -392,6 +402,9 @@ int main() {
         int index = 0;
         get_points_from_tree(&root, points, &index);
         point_count = index; // some might fly out and no longer be valid
+        if (point_count == 0 ) {
+            exit(0);
+        }
         
         apply_velocities(points);
         
