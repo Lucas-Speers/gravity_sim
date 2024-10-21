@@ -328,6 +328,11 @@ void points_to_image(Point *points, unsigned char *image) {
 void write_to_ppm(unsigned char *image, char *filename) {
     FILE *fptr;
     fptr = fopen(filename, "w");
+    
+    if (fptr == NULL) {
+        printf("Could not make file: %s", filename);
+        exit(1);
+    }
 
     fprintf(fptr, "P3\n%d %d\n255\n", screen_width, screen_hight);
     for (int i=0; i<screen_hight*screen_width*3; i+=3) {
