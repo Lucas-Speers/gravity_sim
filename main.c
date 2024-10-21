@@ -1,8 +1,4 @@
 // How to use (requires linux with imagemagick and FFmpeg):
-// gcc main.c -lm
-// ./a.out
-// ffmpeg -f image2 -framerate 10 -i %01d.png -vcodec libx264 -crf 22 video.mp4
-
 
 #include <math.h>
 #include <stdio.h>
@@ -12,8 +8,8 @@
 
 typedef int bool;
 int quad_capacity = 5; // TWEAKABLE (preformance)
-int point_count = 10000; // TWEAKABLE
-float G = 0.0001; // TWEAKABLE
+int point_count = 100000; // TWEAKABLE
+float G = 0.00001; // TWEAKABLE
 
 int screen_width = 1000;
 int screen_hight = 1000;
@@ -351,12 +347,6 @@ int main() {
 
     char *filename = calloc(255, sizeof(char));
     expect(filename);
-    char *new_filename = calloc(255, sizeof(char));
-    expect(new_filename);
-    char *conversion_command = calloc(255, sizeof(char));
-    expect(conversion_command);
-    char *remove_command = calloc(255, sizeof(char));
-    expect(remove_command);
 
     int i=0;
     while (i<point_count) {
@@ -379,15 +369,9 @@ int main() {
     int iteration = 0;
 
     while (1) {
-        time_t start, stop;
-        start = clock();
 
         sprintf(filename, "%d.ppm", iteration);
-        sprintf(new_filename, "%d.png", iteration);
-        sprintf(conversion_command, "convert %s %s", filename, new_filename);
-        sprintf(remove_command, "rm %s", filename);
         
-
         QuadTree root;
         new_quad_tree(&root);
         root.bounds.x = root.bounds.y = -1.1;
@@ -410,13 +394,9 @@ int main() {
         points_to_image(points, image);
         write_to_ppm(image, filename);
 
-        system(conversion_command);
-        system(remove_command);
-
         free_quad_tree(&root);
 
-        stop = clock();
-        printf("iteration %d took %f seconds for %d points\n", iteration, (float)(stop-start)/CLOCKS_PER_SEC, point_count);
+        printf("iteration %d : %d points\n", iteration, point_count);
         iteration++;
     }
 
